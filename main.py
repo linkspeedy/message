@@ -4,6 +4,7 @@ import asyncio
 import time
 import discord
 import requests
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 from keep_alive import keep_alive
 
@@ -26,13 +27,34 @@ logger = logging.getLogger('discord_selfbot')
 def send_telegram_join_alert(member: discord.Member):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         return
+
+    # Calculate account age
+    now = datetime.now(timezone.utc)
+    account_age_days = (now - member.created_at).days
+    
+    # Format dates
+    joined_date = member.joined_at.strftime("%d/%m/%Y %H:%M") if member.joined_at else "Unknown"
+    created_date = member.created_at.strftime("%d/%m/%Y %H:%M")
+    
+    # Get avatar URL
+    avatar_url = member.display_avatar.url if member.display_avatar else ""
+    
+    # Mutual servers count
+    mutual_count = len(member.mutual_guilds)
+
     text = (
-        f"👋 *New Member Joined*\n"
-        f"👤 User: {member.display_name}\n"
-        f"🏠 Server: {member.guild.name}\n"
+        f"🛑 *{member.guild.name}* 🛑\n\n"
+        f"👤 *Display Name*: {member.display_name}\n"
+        f"💬 *Username*: {member.name}\n"
+        f"⌛ *Account Age*: {account_age_days} days\n\n"
+        f"📅 *Joined*: {joined_date}\n"
+        f"🎂 *Account Created*: {created_date}\n\n"
+        f"🖼️ [👁️ Avatar]({avatar_url})\n"
+        f"🤝 {mutual_count} mutual servers"
     )
+    
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "Markdown"}
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "Markdown", "disable_web_page_preview": False}
     try:
         requests.post(url, json=payload, timeout=5)
     except Exception as e:
@@ -136,6 +158,7 @@ class IntelSelfBot(discord.Client):
             'discord_id': str(message.id),
             'content': content,
             'author_name': str(message.author.display_name),
+            'author_username': str(message.author.name),
             'author_id': str(message.author.id),
             'channel_id': str(message.channel.id),
             'channel_name': str(message.channel.name),
