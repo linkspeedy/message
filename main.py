@@ -24,6 +24,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger('discord_selfbot')
 
+def escape_markdown(text):
+    """Helper to escape Markdown v1 characters."""
+    if not text:
+        return ""
+    # Escape characters that have special meaning in Markdown V1
+    for char in ['_', '*', '`', '[']:
+        text = str(text).replace(char, f'\\{char}')
+    return text
+
 def send_telegram_join_alert(member: discord.Member):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         return
@@ -43,9 +52,9 @@ def send_telegram_join_alert(member: discord.Member):
     mutual_count = len(member.mutual_guilds)
 
     text = (
-        f"🛑 *{member.guild.name}* 🛑\n\n"
-        f"👤 *Display Name*: {member.display_name}\n"
-        f"💬 *Username*: {member.name}\n"
+        f"🛑 *{escape_markdown(member.guild.name)}* 🛑\n\n"
+        f"👤 *Display Name*: {escape_markdown(member.display_name)}\n"
+        f"💬 *Username*: {escape_markdown(member.name)}\n"
         f"⌛ *Account Age*: {account_age_days} days\n\n"
         f"📅 *Joined*: {joined_date}\n"
         f"🎂 *Account Created*: {created_date}\n\n"
@@ -56,9 +65,11 @@ def send_telegram_join_alert(member: discord.Member):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "Markdown", "disable_web_page_preview": False}
     try:
-        requests.post(url, json=payload, timeout=5)
+        response = requests.post(url, json=payload, timeout=5)
+        if response.status_code != 200:
+            logger.error(f'Telegram join alert error ({response.status_code}): {response.text}')
     except Exception as e:
-        logger.error(f'Failed to send telegram join alert: {e}')
+        logger.error(f'Failed to send telegram join alert exception: {e}')
 
 def send_to_api(payload: dict, retries: int = 3):
     """Send message payload to Django API with exponential backoff."""
