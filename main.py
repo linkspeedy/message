@@ -46,10 +46,16 @@ def send_telegram_join_alert(member: discord.Member):
     created_date = member.created_at.strftime("%d/%m/%Y %H:%M")
     
     # Avatar URL
-    avatar_url = member.display_avatar.url if member.display_avatar else "No Avatar"
+    if hasattr(member, 'display_avatar') and member.display_avatar:
+        avatar_url = member.display_avatar.url
+    elif hasattr(member, 'avatar') and member.avatar:
+        avatar_url = member.avatar.url
+    else:
+        avatar_url = "No Avatar"
     
     # Mutual servers count
-    mutual_count = len(member.mutual_guilds)
+    mutual_guilds = getattr(member, 'mutual_guilds', [])
+    mutual_count = len(mutual_guilds) if isinstance(mutual_guilds, list) else 0
 
     text = (
         f"👋 *New Member Joined*\n"
