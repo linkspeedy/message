@@ -57,15 +57,16 @@ def send_telegram_join_alert(member: discord.Member):
     mutual_guilds = getattr(member, 'mutual_guilds', [])
     mutual_count = len(mutual_guilds) if isinstance(mutual_guilds, list) else 0
 
+
     text = (
-        f"👋 *New Member Joined*\n"
-        f"👤 User: {escape_markdown(member.display_name)}\n"
-        f"🏠 Server: {escape_markdown(member.guild.name)}\n"
-        f"⌛ Account Age: {account_age_days} days\n"
-        f"📅 Joined: {joined_date}\n"
-        f"🎂 Created: {created_date}\n"
-        f"🖼️ Avatar: [Link]({avatar_url})\n"
-        f"🤝 Mutual Servers: {mutual_count}"
+        f"🛑 *{escape_markdown(member.guild.name)}* 🛑\n\n"
+        f"👤 *Display Name*: {escape_markdown(member.display_name)}\n"
+        f"💬 *Username*: {escape_markdown(member.name)}\n"
+        f"⌛ *Account Age*: {account_age_days} days\n\n"
+        f"📅 *Joined*: {joined_date}\n"
+        f"🎂 *Account Created*: {created_date}\n\n"
+        f"🖼️ [👁️ Avatar]({avatar_url})\n"
+        f"🤝 {mutual_count} mutual servers"
     )
     
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
