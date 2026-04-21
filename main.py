@@ -45,31 +45,29 @@ def send_telegram_join_alert(member: discord.Member):
     joined_date = member.joined_at.strftime("%d/%m/%Y %H:%M") if member.joined_at else "Unknown"
     created_date = member.created_at.strftime("%d/%m/%Y %H:%M")
     
-    # Get avatar URL
-    avatar_url = member.display_avatar.url if member.display_avatar else ""
+    # Avatar URL
+    avatar_url = member.display_avatar.url if member.display_avatar else "No Avatar"
     
     # Mutual servers count
     mutual_count = len(member.mutual_guilds)
 
     text = (
-        f"🛑 *{escape_markdown(member.guild.name)}* 🛑\n\n"
-        f"👤 *Display Name*: {escape_markdown(member.display_name)}\n"
-        f"💬 *Username*: {escape_markdown(member.name)}\n"
-        f"⌛ *Account Age*: {account_age_days} days\n\n"
-        f"📅 *Joined*: {joined_date}\n"
-        f"🎂 *Account Created*: {created_date}\n\n"
-        f"🖼️ [👁️ Avatar]({avatar_url})\n"
-        f"🤝 {mutual_count} mutual servers"
+        f"👋 *New Member Joined*\n"
+        f"👤 User: {escape_markdown(member.display_name)}\n"
+        f"🏠 Server: {escape_markdown(member.guild.name)}\n"
+        f"⌛ Account Age: {account_age_days} days\n"
+        f"📅 Joined: {joined_date}\n"
+        f"🎂 Created: {created_date}\n"
+        f"🖼️ Avatar: [Link]({avatar_url})\n"
+        f"🤝 Mutual Servers: {mutual_count}"
     )
     
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "Markdown", "disable_web_page_preview": False}
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "Markdown"}
     try:
-        response = requests.post(url, json=payload, timeout=5)
-        if response.status_code != 200:
-            logger.error(f'Telegram join alert error ({response.status_code}): {response.text}')
+        requests.post(url, json=payload, timeout=5)
     except Exception as e:
-        logger.error(f'Failed to send telegram join alert exception: {e}')
+        logger.error(f'Failed to send telegram join alert: {e}')
 
 def send_to_api(payload: dict, retries: int = 3):
     """Send message payload to Django API with exponential backoff."""
@@ -104,7 +102,6 @@ class IntelSelfBot(discord.Client):
         await self.wait_until_ready()
         while not self.is_closed():
             try:
-                # Run sync requests in an executor
                 loop = asyncio.get_event_loop()
                 response = await loop.run_in_executor(None, requests.get, API_RULES_URL)
                 if response.status_code == 200:
@@ -112,7 +109,7 @@ class IntelSelfBot(discord.Client):
                     logger.info(f"🔄 Updated active alert rules (count: {len(self.active_rules)})")
             except Exception as e:
                 logger.error(f"Failed to fetch alert rules: {e}")
-            await asyncio.sleep(60) # check every 60 seconds
+            await asyncio.sleep(60)
 
     async def on_ready(self):
         logger.info(f'✅ Connected as: {self.user} (ID: {self.user.id})')
@@ -160,11 +157,9 @@ class IntelSelfBot(discord.Client):
                         matched = True
                         break
 
-        # Only send to API if there is a match
         if not matched:
             return
 
-        # Prepare Intelligence Payload
         payload = {
             'discord_id': str(message.id),
             'content': content,
@@ -178,7 +173,6 @@ class IntelSelfBot(discord.Client):
             'created_at': message.created_at.isoformat(),
         }
 
-        # Handle API forwarding in a background thread to prevent bot lag
         loop = asyncio.get_event_loop()
         loop.run_in_executor(None, send_to_api, payload)
 
@@ -197,15 +191,12 @@ if __name__ == '__main__':
     
     while retry_count < MAX_RETRIES:
         try:
-            # discord.py-self doesn't use standard intents, selfbots use implicit scopes
             bot = IntelSelfBot()
-
-            # discord.py-self implicitly knows it's a user token
             bot.run(DISCORD_TOKEN)
             break
         except discord.LoginFailure:
             logger.error('❌ Invalid Token! Please check your DISCORD_TOKEN.')
-            break  # Stop retrying on invalid token
+            break
         except Exception as e:
             retry_count += 1
             logger.error(f'❌ Runtime Error Attempt {retry_count}/{MAX_RETRIES}: {e}')
