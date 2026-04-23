@@ -15,6 +15,9 @@ DISCORD_TOKEN = os.getenv('USER_TOKEN')
 API_URL = os.getenv('API_URL')
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
+TOPIC_COMPLAINTS = os.getenv('TELEGRAM_TOPIC_COMPLAINTS')
+TOPIC_MEMBERS = os.getenv('TELEGRAM_TOPIC_MEMBERS')
+TOPIC_TICKETS = os.getenv('TELEGRAM_TOPIC_TICKETS')
 
 # Setup logging
 logging.basicConfig(
@@ -32,6 +35,25 @@ def escape_markdown(text):
     for char in ['_', '*', '`', '[']:
         text = str(text).replace(char, f'\\{char}')
     return text
+
+def send_telegram_alert(text: str, thread_id: str = None):
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        return
+    
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": text,
+        "parse_mode": "Markdown",
+        "disable_web_page_preview": False
+    }
+    if thread_id:
+        payload["message_thread_id"] = thread_id
+        
+    try:
+        requests.post(url, json=payload, timeout=5)
+    except Exception as e:
+        logger.error(f'Failed to send telegram alert: {e}')
 
 def send_telegram_join_alert(member: discord.Member):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
@@ -57,7 +79,6 @@ def send_telegram_join_alert(member: discord.Member):
     mutual_guilds = getattr(member, 'mutual_guilds', [])
     mutual_count = len(mutual_guilds) if isinstance(mutual_guilds, list) else 0
 
-
     text = (
         f"🛑 *{escape_markdown(member.guild.name)}* 🛑\n\n"
         f"👤 *Display Name*: {escape_markdown(member.display_name)}\n"
@@ -69,12 +90,9 @@ def send_telegram_join_alert(member: discord.Member):
         f"🤝 {mutual_count} mutual servers"
     )
     
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "Markdown"}
-    try:
-        requests.post(url, json=payload, timeout=5)
-    except Exception as e:
-        logger.error(f'Failed to send telegram join alert: {e}')
+    
+    # Send to Telegram Topic
+    send_telegram_alert(text, thread_id=TOPIC_MEMBERS)
 
 def send_to_api(payload: dict, retries: int = 3):
     """Send message payload to Django API with exponential backoff."""
@@ -127,6 +145,45 @@ class IntelSelfBot(discord.Client):
         logger.info(f"New member joined: {member.display_name} in {member.guild.name}")
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, send_telegram_join_alert, member)
+
+    async def on_guild_channel_create(self, channel):
+        """Detect new support ticket channels."""
+        if isinstance(channel, discord.TextChannel):
+            name = channel.name.lower()
+            if 'ticket' in name or 'support' in name:
+                logger.info(f"Ticket detected: {channel.name} in {channel.guild.name}")
+                
+                creator_info = "Unknown"
+                try:
+                    # Give the bot/server a moment to set permissions
+                    await asyncio.sleep(2)
+                    
+                    # Find a member who has specific permission overwrites in this channel
+                    # Ticket bots usually add the user as a specific member overwrite
+                    for member_id, overwrite in channel.overwrites.items():
+                        if isinstance(member_id, discord.Member) and not member_id.bot:
+                            creator_info = f"{escape_markdown(member_id.display_name)} (@{escape_markdown(member_id.name)})"
+                            break
+                    
+                    # Fallback: If no member overwrite, check audit logs (might still be the bot)
+                    if creator_info == "Unknown":
+                        async for entry in channel.guild.audit_logs(action=discord.AuditLogAction.channel_create, limit=5):
+                            if entry.target.id == channel.id:
+                                creator = entry.user
+                                creator_info = f"{escape_markdown(creator.display_name)} (@{escape_markdown(creator.name)})"
+                                break
+                except Exception as e:
+                    logger.warning(f"Could not fetch ticket creator info: {e}")
+
+                text = (
+                    f"🎫 *New Support Ticket*\n\n"
+                    f"👤 *Created By*: {creator_info}\n"
+                    f"🏠 *Server*: {escape_markdown(channel.guild.name)}\n"
+                    f"📂 *Channel*: #{escape_markdown(channel.name)}\n"
+                    f"🔗 [Jump to Channel](https://discord.com/channels/{channel.guild.id}/{channel.id})"
+                )
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(None, send_telegram_alert, text, TOPIC_TICKETS)
 
     async def on_message(self, message: discord.Message):
         # Filter intelligence: Ignore bot messages and ignore DMs (no guild)
@@ -182,6 +239,16 @@ class IntelSelfBot(discord.Client):
 
         loop = asyncio.get_event_loop()
         loop.run_in_executor(None, send_to_api, payload)
+        
+        # Also send to Telegram Complaints Topic
+        alert_text = (
+            f"🚨 *Complaint/Alert*\n\n"
+            f"👤 *User*: {escape_markdown(message.author.display_name)}\n"
+            f"🏠 *Server*: {escape_markdown(message.guild.name)}\n"
+            f"💬 *Channel*: #{escape_markdown(message.channel.name)}\n\n"
+            f"📝 *Message*: {escape_markdown(content[:500])}"
+        )
+        loop.run_in_executor(None, send_telegram_alert, alert_text, TOPIC_COMPLAINTS)
 
 if __name__ == '__main__':
     if not DISCORD_TOKEN:
@@ -198,7 +265,11 @@ if __name__ == '__main__':
     
     while retry_count < MAX_RETRIES:
         try:
-            bot = IntelSelfBot()
+            # Note: members intent is required for on_member_join to work.
+            # Using default() + members=True to avoid crashes from all() or privileged intents.
+            intents = discord.Intents.default()
+            intents.members = True
+            bot = IntelSelfBot(intents=intents)
             bot.run(DISCORD_TOKEN)
             break
         except discord.LoginFailure:
