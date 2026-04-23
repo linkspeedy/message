@@ -239,16 +239,6 @@ class IntelSelfBot(discord.Client):
 
         loop = asyncio.get_event_loop()
         loop.run_in_executor(None, send_to_api, payload)
-        
-        # Also send to Telegram Complaints Topic
-        alert_text = (
-            f"🚨 *Complaint/Alert*\n\n"
-            f"👤 *User*: {escape_markdown(message.author.display_name)}\n"
-            f"🏠 *Server*: {escape_markdown(message.guild.name)}\n"
-            f"💬 *Channel*: #{escape_markdown(message.channel.name)}\n\n"
-            f"📝 *Message*: {escape_markdown(content[:500])}"
-        )
-        loop.run_in_executor(None, send_telegram_alert, alert_text, TOPIC_COMPLAINTS)
 
 if __name__ == '__main__':
     if not DISCORD_TOKEN:
@@ -265,11 +255,7 @@ if __name__ == '__main__':
     
     while retry_count < MAX_RETRIES:
         try:
-            # Note: members intent is required for on_member_join to work.
-            # Using default() + members=True to avoid crashes from all() or privileged intents.
-            intents = discord.Intents.default()
-            intents.members = True
-            bot = IntelSelfBot(intents=intents)
+            bot = IntelSelfBot()
             bot.run(DISCORD_TOKEN)
             break
         except discord.LoginFailure:
