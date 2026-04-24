@@ -55,7 +55,7 @@ def send_telegram_alert(text: str, thread_id: str = None):
     except Exception as e:
         logger.error(f'Failed to send telegram alert: {e}')
 
-def send_telegram_join_alert(member: discord.Member):
+def send_telegram_join_alert(member: discord.Member, bot: discord.Client):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         return
 
@@ -76,8 +76,13 @@ def send_telegram_join_alert(member: discord.Member):
         avatar_url = "No Avatar"
     
     # Mutual servers count
+    # Fallback manual calculation if member.mutual_guilds is empty/unreliable
     mutual_guilds = getattr(member, 'mutual_guilds', [])
     mutual_count = len(mutual_guilds) if isinstance(mutual_guilds, list) else 0
+    
+    if mutual_count == 0:
+        # Manually count by checking all guilds the bot is in
+        mutual_count = sum(1 for g in bot.guilds if g.get_member(member.id) is not None)
 
     text = (
         f"🛑 *{escape_markdown(member.guild.name)}* 🛑\n\n"
@@ -144,7 +149,7 @@ class IntelSelfBot(discord.Client):
     async def on_member_join(self, member: discord.Member):
         logger.info(f"New member joined: {member.display_name} in {member.guild.name}")
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, send_telegram_join_alert, member)
+        await loop.run_in_executor(None, send_telegram_join_alert, member, self)
 
     async def on_guild_channel_create(self, channel):
         """Detect new support ticket channels."""
