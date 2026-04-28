@@ -87,7 +87,7 @@ def send_telegram_join_alert(member: discord.Member, bot: discord.Client):
     text = (
         f"🛑 *{escape_markdown(member.guild.name)}* 🛑\n\n"
         f"👤 *Display Name*: {escape_markdown(member.display_name)}\n"
-        f"💬 *Username*: `{escape_markdown(member.name)} 📋`\n"
+        f"💬 *Username*: `{escape_markdown(member.name)}`\n"
         f"⌛ *Account Age*: {account_age_days} days\n\n"
         f"📅 *Joined*: {joined_date}\n"
         f"🎂 *Account Created*: {created_date}\n\n"
@@ -167,7 +167,7 @@ class IntelSelfBot(discord.Client):
                     # Ticket bots usually add the user as a specific member overwrite
                     for member_id, overwrite in channel.overwrites.items():
                         if isinstance(member_id, discord.Member) and not member_id.bot:
-                            creator_info = f"{escape_markdown(member_id.display_name)} (`{escape_markdown(member_id.name)} 📋`)"
+                            creator_info = f"{escape_markdown(member_id.display_name)} (`{escape_markdown(member_id.name)}`)"
                             break
                     
                     # Fallback: If no member overwrite, check audit logs (might still be the bot)
@@ -175,7 +175,7 @@ class IntelSelfBot(discord.Client):
                         async for entry in channel.guild.audit_logs(action=discord.AuditLogAction.channel_create, limit=5):
                             if entry.target.id == channel.id:
                                 creator = entry.user
-                                creator_info = f"{escape_markdown(creator.display_name)} (`{escape_markdown(creator.name)} 📋`)"
+                                creator_info = f"{escape_markdown(creator.display_name)} (`{escape_markdown(creator.name)}`)"
                                 break
                 except Exception as e:
                     logger.warning(f"Could not fetch ticket creator info: {e}")
